@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nps-mcp-server
+  namespace: bench
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nps-mcp-server
+  template:
+    metadata:
+      labels:
+        app: nps-mcp-server
+    spec:
+      containers:
+      - name: nps-mcp-server
+        image: quay.io/rh-ee-tosokin/nps-mcp-server:latest
+        ports:
+        - containerPort: 3005
+        env:
+        - name: NPS_API_KEY
+          value: "DEMO_KEY"  # Or use a secret for real API key
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nps-mcp-server
+  namespace: bench
+spec:
+  selector:
+    app: nps-mcp-server
+  ports:
+  - protocol: TCP
+    port: 3005
+    targetPort: 3005
+  type: ClusterIP
+

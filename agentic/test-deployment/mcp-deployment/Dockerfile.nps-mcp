@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Create writable directory for logs
+RUN mkdir -p /tmp/logs && chmod 777 /tmp/logs
+
+# Install dependencies
+RUN pip install --no-cache-dir fastmcp httpx
+
+# Copy MCP server code
+COPY nps_mcp_server.py /app/nps_mcp_server.py
+
+# Expose port for SSE mode
+EXPOSE 3005
+
+# Run in SSE mode (HTTP) for cluster deployment
+# Use /tmp for log file (writable in OpenShift)
+WORKDIR /tmp
+CMD ["python", "/app/nps_mcp_server.py", "--transport", "sse", "--host", "0.0.0.0", "--port", "3005"]
+
