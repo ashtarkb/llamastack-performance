@@ -79,7 +79,6 @@ Kubernetes Job that runs 128 concurrent Locust users directly against vLLM predi
 - Sends 128 concurrent requests directly to vLLM for 5 minutes
 - Uses the same synthetic 256-token prompt as Chat Completions test
 - Adds 1-2 second wait time between requests to smooth load
-- No state persistence, no LlamaStack overhead
 
 **Purpose:** Establish baseline performance to calculate LlamaStack overhead
 
@@ -133,24 +132,6 @@ oc get jobs -n bench -w
 # View logs
 oc logs -f job/locust-chat-completions-c128 -n bench
 ```
-
-### Collect Results
-
-```bash
-# Find the pod
-POD=$(oc get pods -n bench -l job-name=locust-chat-completions-c128 -o jsonpath='{.items[0].metadata.name}')
-
-# Copy results
-oc cp bench/$POD:/output/ ./results/
-
-# Or view directly
-oc exec -n bench $POD -- ls -la /output/
-```
-
-**Files created:**
-- `locust-results_stats.csv` - Summary statistics
-- `locust-results_stats_history.csv` - Timeline
-- `mcp_metrics.csv` - MCP metrics (only for MCP test)
 
 ## Custom Locust Image
 
