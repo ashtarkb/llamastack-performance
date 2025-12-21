@@ -11,8 +11,8 @@ spec:
       maxReplicas: 5
       targetCPUUtilizationPercentage: 75
       targetMemoryUtilizationPercentage: 70
-    userConfig:
-      configMapName: llamastack-rhoai32-new-postgres-minimal
+    podOverrides:
+      serviceAccountName: default
     containerSpec:
       env:
         - name: VLLM_URL
@@ -23,6 +23,10 @@ spec:
           value: "false"
         - name: FMS_ORCHESTRATOR_URL
           value: "http://localhost:1234"
+        - name: ENABLE_SENTENCE_TRANSFORMERS
+          value: "true"
+        - name: EMBEDDING_PROVIDER
+          value: "sentence-transformers"
         - name: POSTGRES_HOST
           value: "postgres.llamastack.svc.cluster.local"
         - name: POSTGRES_PORT
@@ -46,7 +50,7 @@ spec:
       port: 8321
     distribution:
       # Use whatever LlamaStack image you want to test
-      image: quay.io/opendatahub/llama-stack:latest
+      image: quay.io/aipcc/llama-stack/cpu-ubi9:rhoai-3.2-1765964453
     storage:
       size: 20Gi
       mountPath: /opt/app-root/src/.llama/distributions/rh

@@ -91,40 +91,46 @@ oc exec -n llamastack deployment/postgres -- psql -U llamastack -d llamastack -c
 
 ---
 
-#### 3. Create LlamaStack Configuration (run.yaml)
+#### 3. Custom LlamaStack Configuration (Optional)
 
-The ConfigMap tells LlamaStack to use PostgreSQL instead of SQLite.
+**Note:** Newer LlamaStack images (`rhoai-3.2-1765964453` and later) have PostgreSQL configured as the default storage backend. This step is **only needed if you want to customize** storage backends, providers, or other settings beyond the image defaults.
+
+**If using custom configuration:**
 
 ```bash
 oc apply -f test-deployment/custom-run-yaml-config/configmap-rhoai32-new-postgres-minimal.yaml -n llamastack
 ```
 
-**Creates:**
-- ConfigMap: `llamastack-rhoai32-new-postgres-minimal`
-- Contains: Custom LlamaStack configuration
+This creates a ConfigMap with custom `run.yaml` that overrides image defaults.
 
-**Storage backends configured for PostgreSQL:**
+**Example storage backends in the ConfigMap:**
 
-Each backend changed from SQLite (file-based) to PostgreSQL (shared database).
-
-Example for `sql_inference`:
+Each backend configured for PostgreSQL instead of SQLite:
 ```yaml
-sql_inference:
-  type: sql_postgres
-  host: ${env.POSTGRES_HOST}
-  port: ${env.POSTGRES_PORT}
-  database: ${env.POSTGRES_DB}
-  user: ${env.POSTGRES_USER}
-  password: ${env.POSTGRES_PASSWORD}
+storage:
+  backends:
+    sql_inference:
+      type: sql_postgres
+      host: ${env.POSTGRES_HOST}
+      port: ${env.POSTGRES_PORT}
+      database: ${env.POSTGRES_DB}
+      user: ${env.POSTGRES_USER}
+      password: ${env.POSTGRES_PASSWORD}
 ```
 
-Same configuration applied to: `sql_agents`, `sql_files`, `sql_default`
+Same applied to: `sql_agents`, `sql_files`, `sql_default`
+
+**To use the ConfigMap** in your LlamaStackDistribution:
+```yaml
+spec:
+  server:
+    userConfig:
+      configMapName: llamastack-rhoai32-new-postgres-minimal
+```
 
 ---
 
 #### 4. Deploy LlamaStack
-
-**Option A: With Autoscaling (Recommended)**
 
 ```bash
 oc apply -f test-deployment/llamastack-distribution-postgres-autoscaling.yaml -n llamastack
@@ -132,7 +138,14 @@ oc apply -f test-deployment/llamastack-distribution-postgres-autoscaling.yaml -n
 
 **Requires:**
 - LlamaStack operator installed (see [Operator Setup](#operator-setup) below)
-- ConfigMap from Step 3
+- PostgreSQL from Step 2
+
+**Image:** `quay.io/aipcc/llama-stack/cpu-ubi9:rhoai-3.2-1765964453` (has PostgreSQL as default storage)
+
+**Key configuration in this deployment:**
+- `podOverrides.serviceAccountName: default` - Uses ServiceAccount with imagePullSecrets for private registry access
+- `EMBEDDING_PROVIDER=sentence-transformers` - Configures embedding model provider (required for this image version)
+- `POSTGRES_*` env vars - Connect to PostgreSQL database from Step 2
 
 **Creates:**
 - LlamaStackDistribution CR: `llamastack-rhoai32-new-postgres-minimal`
