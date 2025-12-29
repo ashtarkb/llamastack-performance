@@ -20,7 +20,6 @@ data:
         """Write MCP metrics to CSV immediately"""
         global mcp_csv_initialized
         
-        print(f"[EVENT] on_request called - has MCP context: {'mcp_call_count' in (context or {})}")
         
         if context and "mcp_call_count" in context:
             metric = {

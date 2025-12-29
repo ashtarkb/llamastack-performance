@@ -35,7 +35,7 @@ Kubernetes manifests for deploying the MCP server.
 oc apply -f nps-mcp-server-deployment.yaml -n bench
 ```
 
-**Image:** `quay.io/rh-ee-tosokin/nps-mcp-server:latest` (public)
+**Image:** `quay.io/rh-ee-tosokin/nps-mcp-server:v1-mcp-metrics` (public)
 
 
 ## Verify

@@ -1,0 +1,36 @@
+# Tempo Monolithic instance for storing LlamaStack traces
+# Prerequisites: 
+#   1. Install Red Hat Tempo Operator from OperatorHub
+#   2. The operator creates the openshift-tempo-operator namespace
+#
+# Deploy with: oc apply -f tempo-monolithic.yaml
+#
+apiVersion: tempo.grafana.com/v1alpha1
+kind: TempoMonolithic
+metadata:
+  name: tracing
+  namespace: openshift-tempo-operator
+spec:
+  ingestion:
+    otlp:
+      grpc:
+        enabled: true   # Collector sends to Tempo on port 4317 (gRPC)
+      http:
+        enabled: true   # Also accepts HTTP on port 4318 (not used in our setup)
+  multitenancy:
+    enabled: true
+    mode: openshift
+    authentication:
+    - tenantName: dev
+      tenantId: "1610b0c3-c509-4592-a256-a1871353dbfa"
+  # Query frontend - needs larger message limits for big traces
+  queryFrontend:
+    extraConfig:
+      server:
+        grpc_server_max_recv_msg_size: 20971520   # 20MB
+        grpc_server_max_send_msg_size: 20971520   # 20MB
+  storage:
+    traces:
+      backend: pv                    # Uses default StorageClass (nfs-provisioner)
+      size: 10Gi                     # Persistent storage for traces
+

@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: llamastack
+data:
+  otel-collector-config.yaml: |
+    extensions:
+      # Read bearer token from service account for Tempo gateway auth
+      bearertokenauth:
+        filename: /var/run/secrets/kubernetes.io/serviceaccount/token
+    
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:4318  # LlamaStack sends traces here (HTTP)
+    
+    processors:
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+      k8sattributes:
+        extract:
+          metadata:
+            - k8s.namespace.name
+            - k8s.pod.name
+            - k8s.deployment.name
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.ip
+          - sources:
+              - from: connection
+    
+    exporters:
+      # Send traces to Tempo via gRPC (multitenancy gateway with OAuth)
+      otlp/tempo:
+        endpoint: tempo-tracing-gateway.openshift-tempo-operator.svc.cluster.local:4317
+        auth:
+          authenticator: bearertokenauth
+        headers:
+          X-Scope-OrgID: dev
+        tls:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+      # Also log to stdout for debugging
+      debug:
+        verbosity: detailed
+    
+    service:
+      extensions: [bearertokenauth]
+      pipelines:
+        # Only traces pipeline - LlamaStack sends application traces via OTLP
+        # Metrics are collected separately by Locust job sidecars (Prometheus scraping)
+        traces:
+          receivers: [otlp]
+          processors: [k8sattributes, batch]
+          exporters: [otlp/tempo, debug]
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: llamastack
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      serviceAccountName: otel-collector-sa
+      containers:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:latest
+        args:
+          - "--config=/conf/otel-collector-config.yaml"
+        ports:
+        - containerPort: 4318  # OTLP HTTP
+        volumeMounts:
+        - name: otel-collector-config-vol
+          mountPath: /conf
+      volumes:
+      - name: otel-collector-config-vol
+        configMap:
+          name: otel-collector-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: llamastack
+spec:
+  selector:
+    app: otel-collector
+  ports:
+  - name: otlp-http
+    protocol: TCP
+    port: 4318
+    targetPort: 4318
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector-sa
+  namespace: llamastack
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector-k8s-reader
+rules:
+- apiGroups: [""]
+  resources: ["pods", "namespaces"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "watch", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector-k8s-reader-binding
+subjects:
+- kind: ServiceAccount
+  name: otel-collector-sa
+  namespace: llamastack
+roleRef:
+  kind: ClusterRole
+  name: otel-collector-k8s-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ClusterRole to allow writing traces to the 'dev' tenant in Tempo
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: traces-writer-dev
+rules:
+- apiGroups: [tempo.grafana.com]
+  resources: [dev]              # Tenant name from Tempo multitenancy config
+  resourceNames: [traces]
+  verbs: [create]
+
+---
+# Allow otel-collector-sa to write traces to the 'dev' tenant
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: traces-writer-dev-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: traces-writer-dev
+subjects:
+- kind: ServiceAccount
+  name: otel-collector-sa
+  namespace: llamastack
+
