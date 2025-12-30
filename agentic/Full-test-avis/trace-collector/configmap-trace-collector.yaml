@@ -435,18 +435,23 @@ data:
     # =============================================================================
 
     def get_otel_collector_pod(namespace: str = DEFAULT_NAMESPACE) -> str:
-        cmd = f"oc get pods -n {namespace} -l {OTEL_COLLECTOR_LABEL} -o jsonpath='{{.items[0].metadata.name}}'"
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        cmd = [
+            "oc", "get", "pods",
+            "-n", namespace,
+            "-l", OTEL_COLLECTOR_LABEL,
+            "-o", "jsonpath={.items[0].metadata.name}"
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f"Failed to get OTEL collector pod: {result.stderr}")
-        return result.stdout.strip().strip("'")
+        return result.stdout.strip()
 
 
     def get_otel_logs(pod_name: str, namespace: str = DEFAULT_NAMESPACE, since_seconds: int = None) -> str:
-        cmd = f"oc logs {pod_name} -n {namespace}"
+        cmd = ["oc", "logs", pod_name, "-n", namespace]
         if since_seconds:
-            cmd += f" --since={since_seconds}s"
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            cmd.append(f"--since={since_seconds}s")
+        result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f"Failed to get OTEL logs: {result.stderr}")
         return result.stdout
@@ -454,16 +459,21 @@ data:
 
     def get_locust_times_from_logs(namespace: str = DEFAULT_NAMESPACE) -> tuple:
         """Parse Locust logs to find the actual test start AND end times."""
-        cmd = f"oc get pod -l job-name=locust-complete-test -n {namespace} -o jsonpath='{{.items[0].metadata.name}}'"
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        cmd = [
+            "oc", "get", "pod",
+            "-l", "job-name=locust-complete-test",
+            "-n", namespace,
+            "-o", "jsonpath={.items[0].metadata.name}"
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0 or not result.stdout.strip():
             print("  WARNING: Could not find Locust job pod")
             return None, None
         
-        pod_name = result.stdout.strip().strip("'")
+        pod_name = result.stdout.strip()
         
-        cmd = f"oc logs {pod_name} -c locust-test -n {namespace}"
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        cmd = ["oc", "logs", pod_name, "-c", "locust-test", "-n", namespace]
+        result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             print(f"  WARNING: Could not get Locust logs: {result.stderr}")
             return None, None
